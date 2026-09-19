@@ -3,12 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { FillsPanel } from "@/components/FillsPanel";
+import { ActivityPanel } from "@/components/ActivityPanel";
 import { HoldingsPanel } from "@/components/HoldingsPanel";
 import { OrderBook } from "@/components/OrderBook";
-import { OrdersPanel } from "@/components/OrdersPanel";
 import { PriceChart } from "@/components/PriceChart";
+import { TickerSearch } from "@/components/TickerSearch";
+import { MarketStrip } from "@/components/MarketStrip";
+import { WatchlistPanel } from "@/components/WatchlistPanel";
+import { api } from "@/lib/api";
 import { exchangeLabel, formatKrw, formatUsd, sideLabel, trdeLabel } from "@/lib/format";
+import { pushRecent } from "@/lib/recent";
+import { sessionHint, sessionLabel, useUsSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import { isExchange, resolveExchange } from "@/lib/symbols";
 import { useLiveQuote } from "@/lib/useLiveQuote";
@@ -33,7 +38,10 @@ export function TradingDesk() {
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [modifyId, setModifyId] = useState<string | null>(null);
   const [modifyPrice, setModifyPrice] = useState(0);
+  const [able, setAble] = useState<{ able: number; cashUsd: number; holdQty: number } | null>(null);
   const primedRef = useRef("");
+  const session = useUsSession();
+  const sessionNote = sessionHint(session);
 
   const { quote, quoteError } = useLiveQuote(stkCd, stexTp, exManual, (ex) => {
     if (!exManual) setStexTp(ex);
@@ -68,16 +76,47 @@ export function TradingDesk() {
       : price;
   const notionalUsd = Math.max(0, qty) * (unitPrice || 0);
   const notionalKrw = fx ? notionalUsd * fx : 0;
+  const lastError = state.logs.find((row) => row.level === "error");
+  const posQty = state.positions.find((p) => p.stkCd === stkCd && p.stexTp === stexTp)?.qty || 0;
+  const cashAble = unitPrice > 0 ? Math.floor(state.cashUsd / unitPrice) : 0;
+  const ableQty = able?.able ?? (side === "sell" ? posQty : cashAble);
+  const overAble = ableQty > 0 && qty > ableQty;
+  const overCash = side === "buy" && notionalUsd > 0 && state.cashUsd > 0 && notionalUsd > state.cashUsd;
+  const blocked = state.killSwitch;
   const confirmBody = `종목 ${stkCd} (${exchangeLabel(stexTp)})\n${sideLabel(side)} ${qty}주 · ${trdeLabel(trdeTp)}${
     trdeTp === "03" ? "" : ` · ${formatUsd(price)}`
   }\n총액 ${formatUsd(notionalUsd)}${notionalKrw ? ` · ${formatKrw(notionalKrw)}` : ""}${
     fx ? `\n환율 ${fx.toFixed(2)}원/$` : ""
+  }\n세션 ${sessionLabel(session)}${
+    sessionNote ? `\n${sessionNote}` : ""
   }\n모드 ${state.mode.toUpperCase()}${state.ordersLive ? "\n키움 실주문입니다." : "\n주문은 아직 목업입니다."}${
-    state.killSwitch ? "\n킬스위치가 켜져 있으면 접수가 거절됩니다." : ""
-  }`;
-  const lastError = state.logs.find((row) => row.level === "error");
+    overAble ? `\n가능수량 ${ableQty}주를 넘습니다.` : ""
+  }${overCash ? "\n예수금보다 총액이 큽니다." : ""}`;
 
-  function pickSymbol(next: string, ex: Exchange) {
+  useEffect(() => {
+    if (!stkCd || unitPrice <= 0) {
+      setAble(null);
+      return;
+    }
+    let live = true;
+    const timer = window.setTimeout(() => {
+      api
+        .orderable(stkCd, stexTp, unitPrice, side)
+        .then((next) => {
+          if (live) setAble(next);
+        })
+        .catch(() => {
+          if (live) setAble(null);
+        });
+    }, 350);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [stkCd, stexTp, unitPrice, side]);
+
+  function pickSymbol(next: string, ex: Exchange, name?: string) {
+    pushRecent({ stkCd: next, stexTp: ex, stkNm: name || next });
     setStkCd(next);
     setStexTp(ex);
     setExManual(false);
@@ -85,8 +124,9 @@ export function TradingDesk() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-6.5rem)] flex-col gap-1 md:h-[calc(100dvh-3.25rem)]">
-      <div className="grid min-h-0 flex-[1.35] gap-1 xl:grid-cols-[minmax(240px,300px)_330px_minmax(0,1fr)] xl:[&>*]:min-h-0">
+    <div className="flex h-full min-h-0 flex-col gap-1 overflow-y-auto lg:overflow-hidden">
+      <MarketStrip />
+      <div className="grid min-h-[36rem] flex-[3] gap-1 lg:min-h-0 lg:grid-cols-[minmax(260px,320px)_minmax(280px,320px)_minmax(0,1fr)] lg:[&>*]:min-h-0">
         {quote ? (
           <OrderBook
             compact
@@ -98,30 +138,38 @@ export function TradingDesk() {
             }}
           />
         ) : (
-          <div className="panel flex h-full min-h-[18rem] items-center justify-center p-6 text-sm text-cream-500 xl:min-h-0">
+          <div className="panel flex min-h-[22rem] items-center justify-center p-6 text-sm text-cream-500 lg:h-full lg:min-h-0">
             {quoteError || "현재가를 불러오는 중…"}
           </div>
         )}
 
-        <div className="flex min-h-0 min-w-0 flex-col gap-1">
+        <div className="flex min-h-[22rem] min-w-0 flex-col gap-1 lg:min-h-0">
           <form
             className="panel flex shrink-0 flex-col gap-1.5 overflow-hidden p-2"
             onSubmit={(e) => {
               e.preventDefault();
+              if (blocked) return;
               setConfirmOpen(true);
             }}
           >
           <label className="block text-xs">
-            <span className="mb-0.5 block text-[12px] text-cream-500">티커</span>
-            <input
-              className="field uppercase"
+            <span className="mb-0.5 block text-[12px] text-cream-500">
+              티커{quote ? ` · ${exchangeLabel(quote.stexTp)}` : ""} · {sessionLabel(session)}
+            </span>
+            <TickerSearch
+              showRecent
               value={stkCd}
-              onChange={(e) => {
-                const next = e.target.value.toUpperCase();
+              onChange={(next) => {
                 setStkCd(next);
                 setExManual(false);
                 const resolved = resolveExchange(next, { items: state.items, positions: state.positions });
                 if (resolved) setStexTp(resolved);
+              }}
+              onPick={(hit) => {
+                setStkCd(hit.stkCd);
+                setStexTp(hit.stexTp);
+                setExManual(false);
+                primedRef.current = "";
               }}
             />
           </label>
@@ -134,7 +182,14 @@ export function TradingDesk() {
               </select>
             </label>
             <label className="block text-xs">
-              <span className="mb-0.5 block text-[12px] text-cream-500">수량</span>
+              <span className="mb-0.5 flex items-center justify-between text-[12px] text-cream-500">
+                <span>수량</span>
+                {ableQty > 0 && (
+                  <button type="button" className="text-brass-400 hover:underline" onClick={() => setQty(ableQty)}>
+                    가능 {ableQty}주
+                  </button>
+                )}
+              </span>
               <input className="field" type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
             </label>
             <label className="block text-xs">
@@ -165,35 +220,16 @@ export function TradingDesk() {
               {notionalKrw ? ` ${formatKrw(notionalKrw)}` : ""}
               {fx ? ` · ${fx.toFixed(2)}원/$` : ""}
             </p>
+            {side === "buy" && state.cashUsd > 0 && (
+              <p className="mt-0.5 text-[12px] text-cream-500">예수금 {formatUsd(state.cashUsd)}</p>
+            )}
+            {side === "sell" && posQty > 0 && <p className="mt-0.5 text-[12px] text-cream-500">보유 {posQty}주</p>}
           </div>
-          {quote && (
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                className="btn btn-ghost !py-1 !text-down"
-                onClick={() => {
-                  setSide("buy");
-                  setPrice(quote.bid);
-                  setTrdeTp("00");
-                }}
-              >
-                매수 {formatUsd(quote.bid)}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost !py-1 !text-up"
-                onClick={() => {
-                  setSide("sell");
-                  setPrice(quote.ask);
-                  setTrdeTp("00");
-                }}
-              >
-                매도 {formatUsd(quote.ask)}
-              </button>
-            </div>
-          )}
-          <button className="btn btn-primary w-full" type="submit">
-            주문 검토
+          {sessionNote && <p className="text-[12px] text-cream-500">{sessionNote}</p>}
+          {overAble && <p className="text-[12px] text-up">가능수량 {ableQty}주를 넘습니다.</p>}
+          {overCash && <p className="text-[12px] text-up">예수금보다 총액이 큽니다.</p>}
+          <button className="btn btn-primary w-full disabled:pointer-events-none disabled:opacity-40" type="submit" disabled={blocked}>
+            {blocked ? "킬스위치 — 주문 중지" : "주문"}
           </button>
           {lastError && <p className="text-sm text-up">{lastError.message}</p>}
         </form>
@@ -211,9 +247,9 @@ export function TradingDesk() {
         <HoldingsPanel compact selectOnClick onSymbol={pickSymbol} quote={quote} />
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-1 lg:grid-cols-2 lg:[&>*]:min-h-0">
-        <OrdersPanel
-          compact
+      <div className="grid min-h-[14rem] flex-[2] gap-1 lg:min-h-0 lg:grid-cols-2 lg:[&>*]:min-h-0">
+        <WatchlistPanel onSymbol={pickSymbol} selected={{ stkCd, stexTp }} />
+        <ActivityPanel
           fallbackPrice={quote?.last || 0}
           onModify={(id, nextPrice) => {
             setModifyId(id);
@@ -221,7 +257,6 @@ export function TradingDesk() {
           }}
           onCancel={setCancelId}
         />
-        <FillsPanel compact />
       </div>
 
       <ConfirmDialog

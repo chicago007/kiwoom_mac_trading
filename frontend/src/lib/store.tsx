@@ -31,6 +31,7 @@ export type AppState = {
   logs: AppLog[];
   settings: Settings;
   selectedWatchlistId: string;
+  watchlistNote?: string;
 };
 
 type Action =
@@ -62,7 +63,8 @@ const seed: AppState = {
   kiwoomError: "",
   fxUsdKrw: 0,
   ordersLive: false,
-  selectedWatchlistId: "wl-holdings",
+  selectedWatchlistId: "wl-kiwoom",
+  watchlistNote: "",
   watchlists: [
     { id: "wl-holdings", name: "보유종목", source: "holdings" },
     { id: "wl-kiwoom", name: "HTS 관심종목", source: "kiwoom_import" },
@@ -149,9 +151,9 @@ function reducer(state: AppState, action: Action): AppState {
       if (state.items.some((i) => i.watchlistId === action.item.watchlistId && i.stkCd === action.item.stkCd && i.stexTp === action.item.stexTp)) {
         return state;
       }
-      return { ...state, items: [...state.items, { ...action.item, id: uid("i") }] };
+      return { ...state, items: [...state.items, { ...action.item, id: uid("i") }], watchlistNote: "" };
     case "removeItem":
-      return { ...state, items: state.items.filter((i) => i.id !== action.id) };
+      return { ...state, items: state.items.filter((i) => i.id !== action.id), watchlistNote: "" };
     case "toggleItem":
       return {
         ...state,
@@ -241,8 +243,10 @@ async function persist(action: Action, current: AppState): Promise<AppState | nu
       return api.removeWatchlist(action.id);
     case "addItem":
       return api.addItem(action.item.watchlistId, action.item);
-    case "removeItem":
-      return api.removeItem(current.selectedWatchlistId, action.id);
+    case "removeItem": {
+      const row = current.items.find((i) => i.id === action.id);
+      return api.removeItem(row?.watchlistId || current.selectedWatchlistId, action.id);
+    }
     case "toggleItem":
       return api.toggleItem(current.selectedWatchlistId, action.id);
     case "importKiwoom":

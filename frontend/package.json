@@ -1,7 +1,7 @@
 {
   "name": "kiwoom-mac-trading-ui",
-  "version": "0.1.0",
-  "productVersion": "0.1",
+  "version": "0.11.0",
+  "productVersion": "0.11",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack --port 3010 --hostname 127.0.0.1",

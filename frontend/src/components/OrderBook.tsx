@@ -20,7 +20,7 @@ export function OrderBook({ quote, onPick, compact = false }: Props) {
   const resetKey = `${quote.stkCd}-${quote.stexTp}`;
 
   return (
-    <div className="panel flex min-h-0 flex-col overflow-hidden">
+    <div className="panel flex h-full min-h-[22rem] flex-col overflow-hidden lg:min-h-0">
       <div className={`shrink-0 bg-ink-800/40 ${compact ? "px-2 py-1" : "px-3 py-2"}`}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -33,7 +33,14 @@ export function OrderBook({ quote, onPick, compact = false }: Props) {
             {quote.bookLive ? "실시간 10호가" : asks.length || bids.length ? "10호가" : quote.source === "kiwoom" ? "실시간 호가 대기" : "목업 호가"}
           </p>
         </div>
-        {!compact && (
+        {compact ? (
+          <dl className="mt-1 grid grid-cols-4 gap-x-2 text-[11px]">
+            <Stat label="시" value={formatUsd(quote.open)} />
+            <Stat label="고" value={formatUsd(quote.high)} />
+            <Stat label="저" value={formatUsd(quote.low)} />
+            <Stat label="전" value={formatUsd(quote.prevClose)} />
+          </dl>
+        ) : (
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
             <Stat label="시가" value={formatUsd(quote.open)} />
             <Stat label="고가" value={formatUsd(quote.high)} />

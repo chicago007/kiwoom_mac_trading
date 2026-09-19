@@ -1,4 +1,4 @@
-# 앱 API (0.1)
+# 앱 API (0.11)
 
 호스트: `http://127.0.0.1:8010`  
 OpenAPI: `/docs`
@@ -15,12 +15,15 @@ OpenAPI: `/docs`
 | DELETE | `/api/watchlists/{id}/items/{itemId}` | 종목 제거 |
 | POST | `/api/watchlists/{id}/items/{itemId}/toggle` | 사용 여부 |
 | POST | `/api/watchlists/{id}/import-kiwoom` | HTS 관심 가져오기 (`usa20200/20201`) |
-| GET | `/api/symbols/search?q=` | 티커 검색 |
+| POST | `/api/watchlists/{id}/save` | 관심종목 앱 저장. 키움 쓰기는 공식 API 없음 |
+| GET | `/api/symbols/search?q=` | 티커 검색 (`usa10098` + `usa10099`) |
 | GET | `/api/quotes?stk_cd=&stex_tp=` | 현재가·10호가 (`usa20100` + `usa20101`/`FT`) |
 | GET | `/api/quotes/live?stk_cd=&stex_tp=` | 캐시+실시간 호가 스냅샷 |
 | GET | `/api/quotes/stream?stk_cd=&stex_tp=` | SSE (FT 스냅샷) |
 | GET | `/api/charts?stk_cd=&stex_tp=&interval=` | 차트. `interval`은 `1`/`5`/`D` (`usa06011`/`usa06012`) |
-| GET | `/api/markets` | 대시보드 시장 지표 |
+| GET | `/api/markets` | 대표지수·환율. 지수는 거래소/선물, 원달러는 키움 `ust31301` + 시장환율 |
+| GET | `/api/orders/able?stk_cd=&stex_tp=&price=&side=` | 주문가능수량 (`ust31490` 또는 예수금/보유) |
+| GET | `/api/trades?strt_dt=&end_dt=&tp=&stex_tp=&stk_cd=` | 기간 거래내역 (`ust21100`) |
 | GET/POST | `/api/orders` | 주문 목록 / 수동 주문 |
 | POST | `/api/orders/{ord_no}/modify` | 정정 |
 | POST | `/api/orders/{ord_no}/cancel` | 취소 |

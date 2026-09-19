@@ -13,17 +13,18 @@ const STATUS: Record<string, string> = {
 
 type Props = {
   compact?: boolean;
+  bare?: boolean;
   onModify: (id: string, price: number) => void;
   onCancel: (id: string) => void;
   fallbackPrice?: number;
 };
 
-export function OrdersPanel({ compact = false, onModify, onCancel, fallbackPrice = 0 }: Props) {
+export function OrdersPanel({ compact = false, bare = false, onModify, onCancel, fallbackPrice = 0 }: Props) {
   const { state } = useStore();
 
   return (
-    <section className="panel flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 bg-ink-800/40 px-2 py-1 text-xs font-medium">주문 내역 {state.orders.length}건</div>
+    <section className={`${bare ? "" : "panel "}flex h-full min-h-0 flex-col overflow-hidden`}>
+      {!bare && <div className="shrink-0 bg-ink-800/40 px-2 py-1 text-xs font-medium">주문 내역 {state.orders.length}건</div>}
       <div className="min-h-0 flex-1 overflow-auto">
         <table className={`data ${compact ? "tight" : ""}`}>
           <thead className="sticky top-0 bg-ink-800">

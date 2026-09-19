@@ -17,6 +17,26 @@ export function formatQty(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
+export function formatSignedUsd(value: number, digits = 2) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatUsd(value, digits)}`;
+}
+
+export function formatVol(value: number) {
+  if (!value) return "—";
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return formatQty(value);
+}
+
+export function formatNum(value: number, digits = 2) {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
 export function formatPct(value: number) {
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;

@@ -1,5 +1,5 @@
 import type { AppState } from "./store";
-import type { ChartInterval, ChartPayload, Exchange, MarketItem, Mode, Quote, Settings, WatchlistItem } from "./types";
+import type { ChartInterval, ChartPayload, Exchange, MarketItem, Mode, Quote, Settings, TradeRow, WatchlistItem } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -36,9 +36,11 @@ export const api = {
     request<AppState>(`/api/watchlists/${watchlistId}/items/${itemId}/toggle`, { method: "POST" }),
   importKiwoom: (watchlistId: string) =>
     request<AppState>(`/api/watchlists/${watchlistId}/import-kiwoom`, { method: "POST" }),
+  saveWatchlist: (watchlistId: string) =>
+    request<AppState>(`/api/watchlists/${watchlistId}/save`, { method: "POST" }),
   searchSymbols: (q: string) => request<{ results: Array<Omit<WatchlistItem, "id" | "watchlistId" | "enabled">> }>(`/api/symbols/search?q=${encodeURIComponent(q)}`),
-  quote: (stkCd: string, stexTp: Exchange) =>
-    request<Quote>(`/api/quotes?stk_cd=${encodeURIComponent(stkCd)}&stex_tp=${stexTp}`),
+  quote: (stkCd: string, stexTp: Exchange, lite = false) =>
+    request<Quote>(`/api/quotes?stk_cd=${encodeURIComponent(stkCd)}&stex_tp=${stexTp}${lite ? "&lite=true" : ""}`),
   liveQuote: (stkCd: string, stexTp: Exchange) =>
     request<Quote>(`/api/quotes/live?stk_cd=${encodeURIComponent(stkCd)}&stex_tp=${stexTp}`),
   chart: (stkCd: string, stexTp: Exchange, interval: ChartInterval) =>
@@ -46,6 +48,14 @@ export const api = {
       `/api/charts?stk_cd=${encodeURIComponent(stkCd)}&stex_tp=${stexTp}&interval=${interval}`,
     ),
   markets: () => request<{ markets: MarketItem[]; at: number }>("/api/markets"),
+  trades: (from: string, to: string, tp = "0", stexTp = "", stkCd = "") =>
+    request<{ rows: TradeRow[]; buySum: number; sellSum: number; from: string; to: string; note?: string }>(
+      `/api/trades?strt_dt=${from}&end_dt=${to}&tp=${encodeURIComponent(tp)}&stex_tp=${stexTp}&stk_cd=${encodeURIComponent(stkCd)}`,
+    ),
+  orderable: (stkCd: string, stexTp: Exchange, price: number, side: "buy" | "sell") =>
+    request<{ able: number; cashUsd: number; holdQty: number; source: string }>(
+      `/api/orders/able?stk_cd=${encodeURIComponent(stkCd)}&stex_tp=${stexTp}&price=${price}&side=${side}`,
+    ),
   placeOrder: (order: {
     stkCd: string;
     stexTp: Exchange;

@@ -7,6 +7,7 @@ export type Watchlist = {
   id: string;
   name: string;
   source: "app" | "kiwoom_import" | "holdings";
+  gcod?: string;
 };
 
 export type WatchlistItem = {
@@ -142,5 +143,30 @@ export type MarketItem = {
   last: number;
   change: number;
   changePct: number;
-  unit: "usd" | "krw";
+  unit: "usd" | "krw" | "pct";
+  source?: string;
+};
+
+export type TradeRow = {
+  dealDt: string;
+  procTime: string;
+  kind: string;
+  remark: string;
+  stkCd: string;
+  stkNm: string;
+  qty: number;
+  priceFx: number;
+  amountUsd: number;
+  amountKrw: number;
+  feeUsd: number;
+  taxUsd: number;
+  taxKrw: number;
+  settleUsd: number;
+  settleKrw: number;
+  cashUsd: number;
+  cashKrw: number;
+  media: string;
+  dealNo: string;
+  stexNm: string;
+  crnc: string;
 };

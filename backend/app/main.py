@@ -11,7 +11,7 @@ from app import book_hub, kiwoom_gateway
 from app.store import store
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else "0.1"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else "0.11"
 
 
 @asynccontextmanager
@@ -87,7 +87,7 @@ def redirect_home(request: Request) -> RedirectResponse:
 
 @app.get("/watchlists")
 def redirect_watchlists(request: Request) -> RedirectResponse:
-    return _ui("/watchlists", request)
+    return _ui("/", request)
 
 
 @app.get("/orders")
@@ -131,7 +131,7 @@ def health() -> dict:
         if KIWOOM_ENABLED and KIWOOM_ORDERS_ENABLED
         else "시세·예수금·잔고는 키움, 주문은 아직 목업입니다."
         if KIWOOM_ENABLED
-        else "0.1 목업입니다.",
+        else "목업입니다.",
     }
 
 
@@ -209,9 +209,27 @@ def import_kiwoom(watchlist_id: str) -> dict:
     return store.import_kiwoom(watchlist_id)
 
 
+@app.post("/api/watchlists/{watchlist_id}/save")
+def save_watchlist(watchlist_id: str) -> dict:
+    return store.save_watchlist(watchlist_id)
+
+
 @app.get("/api/symbols/search")
 def search_symbols(q: str = "") -> dict:
-    return {"results": store.search_symbols(q)}
+    local = store.search_symbols(q)
+    if KIWOOM_ENABLED:
+        try:
+            live = kiwoom_gateway.search_symbols(q)
+            seen = {(row["stexTp"], row["stkCd"]) for row in live}
+            for row in local:
+                key = (row["stexTp"], row["stkCd"])
+                if key not in seen:
+                    live.append(row)
+                    seen.add(key)
+            return {"results": live[:8]}
+        except Exception:  # noqa: BLE001
+            pass
+    return {"results": local}
 
 
 def _blank_quote(stk_cd: str, stex_tp: str) -> dict:
@@ -263,11 +281,12 @@ def _merge_quote(quote: dict) -> dict:
 
 
 @app.get("/api/quotes")
-def get_quote(stk_cd: str, stex_tp: str = "ND") -> dict:
+def get_quote(stk_cd: str, stex_tp: str = "ND", lite: bool = False) -> dict:
     if not stk_cd.strip():
         raise HTTPException(400, "stk_cd is required")
-    book_hub.watch(stex_tp, stk_cd)
-    return _merge_quote(_rest_quote(stk_cd, stex_tp, True))
+    if not lite:
+        book_hub.watch(stex_tp, stk_cd)
+    return _merge_quote(_rest_quote(stk_cd, stex_tp, not lite))
 
 
 @app.get("/api/quotes/live")
@@ -292,12 +311,20 @@ def get_chart(stk_cd: str, stex_tp: str = "ND", interval: str = "D") -> dict:
 
 @app.get("/api/markets")
 def get_markets() -> dict:
-    if KIWOOM_ENABLED:
-        try:
-            return kiwoom_gateway.get_markets()
-        except Exception as exc:  # noqa: BLE001
-            raise HTTPException(502, str(exc)[:200]) from exc
-    return {"markets": [], "at": 0}
+    try:
+        return kiwoom_gateway.get_markets()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(502, str(exc)[:200]) from exc
+
+
+@app.get("/api/trades")
+def trades(strt_dt: str, end_dt: str, tp: str = "0", stex_tp: str = "", stk_cd: str = "") -> dict:
+    if not KIWOOM_ENABLED:
+        return {"rows": [], "buySum": 0, "sellSum": 0, "from": strt_dt, "to": end_dt, "note": "키움이 꺼져 있습니다."}
+    try:
+        return kiwoom_gateway.get_trade_history(strt_dt, end_dt, tp=tp, stex_tp=stex_tp, stk_cd=stk_cd)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, str(exc)[:200]) from exc
 
 
 @app.get("/api/quotes/stream")
@@ -335,6 +362,33 @@ async def quote_stream(stk_cd: str, stex_tp: str = "ND"):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/orders/able")
+def orderable(stk_cd: str, stex_tp: str = "ND", price: float = 0, side: str = "buy") -> dict:
+    code = stk_cd.strip().upper()
+    if not code:
+        raise HTTPException(400, "stk_cd is required")
+    snap = store.snapshot()
+    cash = float(snap.get("cashUsd") or 0)
+    px = float(price or 0)
+    cash_qty = int(cash // px) if px > 0 else 0
+    pos = next(
+        (p for p in snap.get("positions") or [] if str(p.get("stkCd") or "").upper() == code and p.get("stexTp") == stex_tp),
+        None,
+    )
+    hold_qty = int(abs(float(pos.get("qty") or 0))) if pos else 0
+    able = hold_qty if side == "sell" else cash_qty
+    source = "position" if side == "sell" else "cash"
+    if side == "buy" and KIWOOM_ENABLED and px > 0:
+        try:
+            live = kiwoom_gateway.orderable_qty(stex_tp, code, px)
+            if live > 0:
+                able = live
+                source = "ust31490"
+        except Exception as exc:  # noqa: BLE001
+            store._log("warn", "ust31490", str(exc)[:200])
+    return {"able": able, "cashUsd": cash, "holdQty": hold_qty, "source": source}
 
 
 @app.get("/api/orders")

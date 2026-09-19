@@ -1,6 +1,6 @@
 [project]
 name = "kiwoom-mac-trading-api"
-version = "0.1.0"
+version = "0.11.0"
 description = "키움증권 맥북용 매매시스템 API"
 readme = "README.md"
 requires-python = ">=3.13"

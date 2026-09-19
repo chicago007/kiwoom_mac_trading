@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Lock
 from uuid import uuid4
+
+WATCHLIST_FILE = Path(__file__).resolve().parents[2] / "data" / "watchlist.json"
 
 
 def _now() -> str:
@@ -23,10 +27,11 @@ SEED = {
     "kiwoom": "disconnected",
     "kiwoomError": "",
     "fxUsdKrw": 0,
-    "selectedWatchlistId": "wl-holdings",
+    "selectedWatchlistId": "wl-kiwoom",
+    "watchlistNote": "",
     "watchlists": [
         {"id": "wl-holdings", "name": "보유종목", "source": "holdings"},
-        {"id": "wl-kiwoom", "name": "HTS 관심종목", "source": "kiwoom_import"},
+        {"id": "wl-kiwoom", "name": "HTS 관심종목", "source": "kiwoom_import", "gcod": ""},
     ],
     "items": [],
     "orders": [],
@@ -52,6 +57,12 @@ SYMBOLS = [
     {"stkCd": "BRK.B", "stexTp": "NY", "stkNm": "Berkshire B", "last": 498.2, "prevClose": 495.0, "open": 496.1, "changePct": 0.65},
     {"stkCd": "JPM", "stexTp": "NY", "stkNm": "JPMorgan", "last": 248.1, "prevClose": 245.6, "open": 246.2, "changePct": 1.02},
     {"stkCd": "AMD", "stexTp": "ND", "stkNm": "AMD", "last": 158.2, "prevClose": 154.8, "open": 155.1, "changePct": 2.2},
+    {"stkCd": "GOOG", "stexTp": "ND", "stkNm": "Alphabet C", "last": 170.2, "prevClose": 168.0, "open": 168.8, "changePct": 1.31},
+    {"stkCd": "AVGO", "stexTp": "ND", "stkNm": "Broadcom", "last": 172.4, "prevClose": 169.1, "open": 170.0, "changePct": 1.95},
+    {"stkCd": "NFLX", "stexTp": "ND", "stkNm": "Netflix", "last": 720.1, "prevClose": 710.0, "open": 712.4, "changePct": 1.42},
+    {"stkCd": "COST", "stexTp": "ND", "stkNm": "Costco", "last": 910.2, "prevClose": 904.0, "open": 906.1, "changePct": 0.69},
+    {"stkCd": "QQQ", "stexTp": "ND", "stkNm": "Invesco QQQ", "last": 480.1, "prevClose": 476.0, "open": 477.2, "changePct": 0.86},
+    {"stkCd": "SPY", "stexTp": "NY", "stkNm": "SPDR S&P 500", "last": 560.4, "prevClose": 557.0, "open": 558.1, "changePct": 0.61},
 ]
 
 
@@ -59,6 +70,8 @@ class AppStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._state = deepcopy(SEED)
+        self._hts_dirty = False
+        self._saved = self._read_saved()
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -109,11 +122,21 @@ class AppStore:
             )
             if not exists:
                 self._state["items"].append({**payload, "id": _uid("i"), "watchlistId": watchlist_id, "enabled": True})
+            row = next((w for w in self._state["watchlists"] if w["id"] == watchlist_id), None)
+            if row and row.get("source") == "kiwoom_import":
+                self._hts_dirty = True
+                self._state["watchlistNote"] = ""
             return deepcopy(self._state)
 
     def remove_item(self, item_id: str) -> dict:
         with self._lock:
+            gone = next((i for i in self._state["items"] if i["id"] == item_id), None)
             self._state["items"] = [i for i in self._state["items"] if i["id"] != item_id]
+            if gone:
+                row = next((w for w in self._state["watchlists"] if w["id"] == gone.get("watchlistId")), None)
+                if row and row.get("source") == "kiwoom_import":
+                    self._hts_dirty = True
+                    self._state["watchlistNote"] = ""
             return deepcopy(self._state)
 
     def toggle_item(self, item_id: str) -> dict:
@@ -131,11 +154,42 @@ class AppStore:
         except Exception as exc:  # noqa: BLE001
             with self._lock:
                 self._log("error", "usa20200", str(exc)[:200])
+                self._state["watchlistNote"] = str(exc)[:200]
                 return deepcopy(self._state)
         with self._lock:
+            self._hts_dirty = False
+            self._saved = {}
+            if WATCHLIST_FILE.exists():
+                WATCHLIST_FILE.unlink()
             self._sync_watchlists_unlocked(groups)
             added = sum(1 for i in self._state["items"] if str(i["watchlistId"]).startswith("wl-hts") or i["watchlistId"] == "wl-kiwoom")
+            self._state["watchlistNote"] = f"키움에서 {added}종목을 불러왔습니다."
             self._log("info", "usa20201", f"키움 관심그룹에서 {added}종목 반영")
+            return deepcopy(self._state)
+
+    def save_watchlist(self, watchlist_id: str) -> dict:
+        from app import kiwoom_gateway
+
+        with self._lock:
+            group = next((w for w in self._state["watchlists"] if w["id"] == watchlist_id), None)
+            items = [i for i in self._state["items"] if i.get("watchlistId") == watchlist_id]
+            gcod = str((group or {}).get("gcod") or "").strip()
+            payload = {
+                str((w.get("gcod") or "").strip()): [
+                    {"stkCd": i["stkCd"], "stexTp": i["stexTp"], "stkNm": i.get("stkNm") or i["stkCd"]}
+                    for i in self._state["items"]
+                    if i.get("watchlistId") == w["id"]
+                ]
+                for w in self._state["watchlists"]
+                if w.get("source") == "kiwoom_import" and w.get("gcod")
+            }
+            self._saved = payload
+            self._write_saved(payload)
+            self._hts_dirty = False
+        note = kiwoom_gateway.save_hts_watchlist(gcod, items)
+        with self._lock:
+            self._state["watchlistNote"] = note
+            self._log("info", "watchlist", note)
             return deepcopy(self._state)
 
     def place_order(self, payload: dict, live: dict | None = None) -> dict:
@@ -236,6 +290,21 @@ class AppStore:
             self._state["kiwoomError"] = ""
             return deepcopy(self._state)
 
+    def _item_row(self, watchlist_id: str, gcod: str, row: dict) -> dict:
+        code = str(row.get("stkCd") or "").upper()
+        return {
+            "id": f"k-{gcod}-{code}",
+            "watchlistId": watchlist_id,
+            "stkCd": code,
+            "stexTp": row.get("stexTp") or "ND",
+            "stkNm": row.get("stkNm") or code,
+            "last": float(row.get("last") or 0),
+            "prevClose": float(row.get("prevClose") or 0),
+            "open": float(row.get("open") or 0),
+            "changePct": float(row.get("changePct") or 0),
+            "enabled": True,
+        }
+
     def _sync_watchlists_unlocked(self, hts: list[dict] | None) -> None:
         app_wls = [w for w in self._state["watchlists"] if w.get("source") == "app"]
         app_ids = {w["id"] for w in app_wls}
@@ -259,33 +328,26 @@ class AppStore:
             )
         hts_wls: list[dict] = []
         hts_items: list[dict] = []
+        existing_by_wl = {w["id"]: [i for i in self._state["items"] if i.get("watchlistId") == w["id"]] for w in self._state["watchlists"] if w.get("source") == "kiwoom_import"}
         if hts:
             for group in hts:
                 gcod = str(group.get("gcod") or "").strip() or "1"
                 wid = f"wl-hts-{gcod}"
-                hts_wls.append({"id": wid, "name": group.get("name") or "HTS 관심종목", "source": "kiwoom_import"})
-                for row in group.get("items") or []:
+                hts_wls.append({"id": wid, "name": group.get("name") or "HTS 관심종목", "source": "kiwoom_import", "gcod": gcod})
+                if self._hts_dirty and wid in existing_by_wl:
+                    hts_items.extend(existing_by_wl[wid])
+                    continue
+                override = (self._saved or {}).get(gcod)
+                source_rows = override if override is not None else (group.get("items") or [])
+                for row in source_rows:
                     code = str(row.get("stkCd") or "").upper()
                     if not code:
                         continue
-                    hts_items.append(
-                        {
-                            "id": f"k-{gcod}-{code}",
-                            "watchlistId": wid,
-                            "stkCd": code,
-                            "stexTp": row.get("stexTp") or "ND",
-                            "stkNm": row.get("stkNm") or code,
-                            "last": 0,
-                            "prevClose": 0,
-                            "open": 0,
-                            "changePct": 0,
-                            "enabled": True,
-                        }
-                    )
+                    hts_items.append(self._item_row(wid, gcod, row))
         else:
             hts_wls = [w for w in self._state["watchlists"] if w.get("source") == "kiwoom_import"]
             if not hts_wls:
-                hts_wls = [{"id": "wl-kiwoom", "name": "HTS 관심종목", "source": "kiwoom_import"}]
+                hts_wls = [{"id": "wl-kiwoom", "name": "HTS 관심종목", "source": "kiwoom_import", "gcod": ""}]
             hts_ids = {w["id"] for w in hts_wls}
             hts_items = [i for i in self._state["items"] if i.get("watchlistId") in hts_ids]
         self._state["watchlists"] = [
@@ -295,13 +357,28 @@ class AppStore:
         ]
         self._state["items"] = holding_items + hts_items + app_items
         ids = {w["id"] for w in self._state["watchlists"]}
-        if self._state.get("selectedWatchlistId") not in ids:
-            self._state["selectedWatchlistId"] = "wl-holdings"
+        first_hts = next((w["id"] for w in hts_wls), "wl-holdings")
+        if self._state.get("selectedWatchlistId") not in ids or self._state.get("selectedWatchlistId") == "wl-holdings":
+            self._state["selectedWatchlistId"] = first_hts
 
     def apply_hts_watchlists(self, groups: list[dict]) -> dict:
         with self._lock:
             self._sync_watchlists_unlocked(groups)
             return deepcopy(self._state)
+
+    def _read_saved(self) -> dict:
+        try:
+            if WATCHLIST_FILE.exists():
+                data = json.loads(WATCHLIST_FILE.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and isinstance(data.get("groups"), dict):
+                    return data["groups"]
+        except Exception:  # noqa: BLE001
+            return {}
+        return {}
+
+    def _write_saved(self, groups: dict) -> None:
+        WATCHLIST_FILE.parent.mkdir(parents=True, exist_ok=True)
+        WATCHLIST_FILE.write_text(json.dumps({"groups": groups}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def set_fx(self, fx: float) -> None:
         if not fx:

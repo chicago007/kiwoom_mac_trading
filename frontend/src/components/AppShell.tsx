@@ -5,15 +5,18 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
 import { formatKrw, formatUsd } from "@/lib/format";
+import { sessionClass, sessionLabel, useUsSession } from "@/lib/session";
 import { APP_VERSION } from "@/lib/version";
 
 const NAV = [
-  { href: "/", label: "대시보드" },
-  { href: "/watchlists", label: "관심종목" },
-  { href: "/trade", label: "종합" },
+  { href: "/", label: "종합" },
   { href: "/logs", label: "로그" },
   { href: "/settings", label: "설정" },
 ];
+
+function isDeskPath(pathname: string) {
+  return pathname === "/" || pathname === "/trade";
+}
 
 function useClock() {
   const [text, setText] = useState("—");
@@ -44,12 +47,14 @@ function useClock() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const desk = isDeskPath(pathname);
   const { state, dispatch } = useStore();
   const clock = useClock();
+  const session = useUsSession();
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 bg-ink-900">
-        <div className={`mx-auto flex items-center gap-3 ${pathname === "/trade" ? "max-w-[1680px] px-2 py-1.5" : "max-w-[1400px] px-4 py-2"}`}>
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="shrink-0 bg-ink-900">
+        <div className={`mx-auto flex items-center gap-3 ${desk ? "max-w-[1680px] px-2 py-1.5" : "max-w-[1400px] px-4 py-2"}`}>
           <Link href="/" className="shrink-0 leading-tight">
             <div className="text-sm font-semibold">키움증권 맥북용 매매시스템</div>
             <div className="text-[12px] text-cream-500">수동 매매 · v{APP_VERSION}</div>
@@ -57,7 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <nav className="hidden flex-1 items-center gap-0 md:flex">
             {NAV.map((item) => {
-              const active = pathname === item.href;
+              const active = item.href === "/" ? desk : pathname === item.href;
               return (
                 <Link
                   key={item.href}
@@ -74,6 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 text-[13px]">
             <span className="hidden text-cream-500 lg:inline">{clock}</span>
+            <span className={`px-1.5 py-0.5 font-medium ${sessionClass(session)}`}>{sessionLabel(session)}</span>
             <span
               className={`px-1.5 py-0.5 font-medium ${
                 state.kiwoom === "connected" ? "bg-brass-500/20 text-brass-400" : "bg-ink-800 text-cream-500"
@@ -118,7 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               className={`shrink-0 px-2.5 py-1 text-xs ${
-                pathname === item.href ? "bg-ink-800 text-brass-400" : "text-cream-300"
+                (item.href === "/" ? desk : pathname === item.href) ? "bg-ink-800 text-brass-400" : "text-cream-300"
               }`}
             >
               {item.label}
@@ -126,7 +132,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
       </header>
-      <main className={`mx-auto ${pathname === "/trade" ? "max-w-[1680px] px-1 py-1" : "max-w-[1400px] px-4 py-4"}`}>{children}</main>
+      <main className={`mx-auto min-h-0 w-full flex-1 ${desk ? "max-w-[1680px] overflow-hidden px-1 pb-1" : "max-w-[1400px] overflow-auto px-4 py-4"}`}>
+        {children}
+      </main>
     </div>
   );
 }

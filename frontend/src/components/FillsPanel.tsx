@@ -3,12 +3,12 @@
 import { exchangeLabel, formatUsd, sideLabel } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
-export function FillsPanel({ compact = false }: { compact?: boolean }) {
+export function FillsPanel({ compact = false, bare = false }: { compact?: boolean; bare?: boolean }) {
   const { state } = useStore();
 
   return (
-    <section className="panel flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 bg-ink-800/40 px-2 py-1 text-xs font-medium">당일 체결 {state.fills.length}건</div>
+    <section className={`${bare ? "" : "panel "}flex h-full min-h-0 flex-col overflow-hidden`}>
+      {!bare && <div className="shrink-0 bg-ink-800/40 px-2 py-1 text-xs font-medium">당일 체결 {state.fills.length}건</div>}
       <div className="min-h-0 flex-1 overflow-auto">
         <table className={`data ${compact ? "tight" : ""}`}>
           <thead className="sticky top-0 bg-ink-800">

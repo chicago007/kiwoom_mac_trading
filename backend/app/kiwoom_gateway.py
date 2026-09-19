@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
 import re
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
-from threading import Lock
+from threading import Lock, Thread
 
 from app.config import KIWOOM_ENABLED, KIWOOM_MODE
 
@@ -626,6 +630,76 @@ def get_today_activity(fallback: dict[str, str] | None = None) -> dict:
     return {"orders": orders, "fills": unique_fills}
 
 
+def _ymd(value: str) -> str:
+    digits = re.sub(r"\D", "", value or "")
+    if len(digits) != 8:
+        raise RuntimeError("날짜는 YYYYMMDD로 입력하세요")
+    return digits
+
+
+def _trade_from_row(row: dict) -> dict | None:
+    deal_dt = str(row.get("deal_dt") or "").strip()
+    if not deal_dt:
+        return None
+    qty = to_float(row.get("deal_qty"))
+    return {
+        "dealDt": deal_dt,
+        "procTime": str(row.get("proc_time") or "").strip(),
+        "kind": str(row.get("deal_kind_nm") or "").strip(),
+        "remark": str(row.get("rmrk_nm") or "").strip(),
+        "stkCd": str(row.get("stk_cd") or "").strip().upper(),
+        "stkNm": str(row.get("stk_nm") or "").strip(),
+        "qty": qty,
+        "priceFx": to_float(row.get("uv_exrt")),
+        "amountUsd": to_float(row.get("fc_deal_amt")),
+        "amountKrw": to_float(row.get("deal_amt")),
+        "feeUsd": to_float(row.get("fc_cmsn")),
+        "taxUsd": to_float(row.get("fc_deal_tax") or row.get("frgn_pay_txam")),
+        "taxKrw": to_float(row.get("tax_tot_amt")),
+        "settleUsd": to_float(row.get("fc_exct_amt")),
+        "settleKrw": to_float(row.get("exct_amt")),
+        "cashUsd": to_float(row.get("fc_entra")),
+        "cashKrw": to_float(row.get("entra_remn")),
+        "media": str(row.get("mdia_nm") or "").strip(),
+        "dealNo": str(row.get("deal_no") or "").strip(),
+        "stexNm": str(row.get("stex_nm") or "").strip(),
+        "crnc": str(row.get("crnc_code") or "").strip().upper(),
+    }
+
+
+def get_trade_history(strt_dt: str, end_dt: str, tp: str = "0", stex_tp: str = "", stk_cd: str = "") -> dict:
+    start = _ymd(strt_dt)
+    end = _ymd(end_dt)
+    if start > end:
+        raise RuntimeError("시작일이 종료일보다 늦습니다")
+    body = {
+        "strt_dt": start,
+        "end_dt": end,
+        "tp": tp or "0",
+        "stex_tp": stex_tp or "",
+        "stk_cd": (stk_cd or "").strip().upper(),
+        "krw_repl_skip_yn": "N",
+    }
+    rows: list[dict] = []
+    buy_sum = 0.0
+    sell_sum = 0.0
+    client = _client()
+    for page in client.iterate_pages(api_id="ust21100", path="/api/us/acnt", body=body, max_pages=8, page_delay_seconds=0.25):
+        payload = page.body or {}
+        code = payload.get("return_code")
+        if code not in (None, 0, "0"):
+            raise RuntimeError(str(payload.get("return_msg") or f"return_code={code}"))
+        buy_sum = to_float(payload.get("buy_sum")) or buy_sum
+        sell_sum = to_float(payload.get("sell_sum")) or sell_sum
+        for row in _result_rows(payload):
+            mapped = _trade_from_row(row)
+            if mapped:
+                rows.append(mapped)
+    rows.sort(key=lambda row: (row.get("dealDt") or "", row.get("procTime") or "", row.get("dealNo") or ""), reverse=True)
+    _set_status(connected=True)
+    return {"rows": rows, "buySum": buy_sum, "sellSum": sell_sum, "from": start, "to": end}
+
+
 _hts_cache: tuple[float, list[dict]] | None = None
 
 
@@ -655,71 +729,261 @@ def get_hts_watchlists(*, force: bool = False) -> list[dict]:
     return out
 
 
-_MARKET_ROWS = (
-    ("dji", "다우", "DIA ETF", "DIA", "NY"),
-    ("spx", "S&P 500", "SPY ETF", "SPY", "NY"),
-    ("ixic", "나스닥", "QQQ ETF", "QQQ", "ND"),
-    ("tnx", "미국채 10년", "IEF · 7-10년 국채 ETF", "IEF", "ND"),
-    ("wti", "원유", "USO ETF", "USO", "NY"),
+_symbol_cache: tuple[float, list[dict]] | None = None
+
+
+def search_symbols(query: str) -> list[dict]:
+    q = query.strip().upper()
+    if not q:
+        return []
+    hits: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(row: dict) -> None:
+        code = str(row.get("stkCd") or "").upper()
+        exch = exchange_code(row.get("stexTp"))
+        if not code:
+            return
+        key = (exch, code)
+        if key in seen:
+            return
+        seen.add(key)
+        hits.append({"stkCd": code, "stexTp": exch, "stkNm": row.get("stkNm") or code})
+
+    if KIWOOM_ENABLED:
+        try:
+            for row in _usa10098(q):
+                add(row)
+        except Exception:  # noqa: BLE001
+            pass
+        for row in _symbol_universe(block=False):
+            add(row)
+        _kick_universe()
+    ranked = []
+    for row in hits:
+        code = row["stkCd"]
+        name = str(row.get("stkNm") or "").upper()
+        if q not in code and q not in name:
+            continue
+        ranked.append((0 if code.startswith(q) else 1, 0 if code == q else 1, code, row))
+    ranked.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [row for _a, _b, _c, row in ranked[:8]]
+
+
+def _usa10098(stk_cd: str) -> list[dict]:
+    body = _call("usa10098", "/api/us/stkinfo", {"stk_cd": stk_cd})
+    out = []
+    for row in _as_rows(body, "list", ["stk_cd", "stex_tp", "stk_nm", "stk_enm"]):
+        code = str(row.get("stk_cd") or "").upper()
+        if not code:
+            continue
+        out.append(
+            {
+                "stkCd": code,
+                "stexTp": exchange_code(row.get("stex_tp")),
+                "stkNm": row.get("stk_enm") or row.get("stk_nm") or code,
+            }
+        )
+    if not out:
+        code = str(body.get("stk_cd") or stk_cd).upper()
+        if code:
+            out.append(
+                {
+                    "stkCd": code,
+                    "stexTp": exchange_code(body.get("stex_tp")),
+                    "stkNm": body.get("stk_enm") or body.get("stk_nm") or code,
+                }
+            )
+    return out
+
+
+_universe_loading = False
+
+
+def _symbol_universe(*, block: bool = False) -> list[dict]:
+    if _symbol_cache and time.time() - _symbol_cache[0] < 12 * 3600:
+        return _symbol_cache[1]
+    if block:
+        _load_universe()
+        return _symbol_cache[1] if _symbol_cache else []
+    return []
+
+
+def _kick_universe() -> None:
+    global _universe_loading
+    if not KIWOOM_ENABLED or _universe_loading or (_symbol_cache and time.time() - _symbol_cache[0] < 12 * 3600):
+        return
+    _universe_loading = True
+    Thread(target=_load_universe, daemon=True).start()
+
+
+def _load_universe() -> None:
+    global _symbol_cache, _universe_loading
+    try:
+        rows = _load_usa10099()
+        _symbol_cache = (time.time(), rows)
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        _universe_loading = False
+
+
+def _load_usa10099() -> list[dict]:
+    client = _client()
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for page in client.iterate_pages(api_id="usa10099", path="/api/us/stkinfo", body={"stex_tp": "%"}, max_pages=8, page_delay_seconds=0.2):
+        payload = page.body or {}
+        for row in _as_rows(payload, "list", ["stk_cd", "stex_tp", "stk_nm", "stk_enm"]):
+            code = str(row.get("stk_cd") or "").upper()
+            exch = exchange_code(row.get("stex_tp"))
+            if not code or (exch, code) in seen:
+                continue
+            seen.add((exch, code))
+            out.append({"stkCd": code, "stexTp": exch, "stkNm": row.get("stk_enm") or row.get("stk_nm") or code})
+    return out
+
+
+def save_hts_watchlist(gcod: str, items: list[dict]) -> str:
+    """키움 공식 REST는 미국주식 관심종목 조회만 있습니다. 쓰기는 스펙에 없습니다."""
+    _ = (gcod, items)
+    return (
+        f"앱에 {len(items)}종목을 저장했습니다. "
+        "키움 REST는 관심종목 조회(usa20200/usa20201)만 있어 영웅문 HTS에는 반영되지 않습니다."
+    )
+
+
+_INDEX_ROWS = (
+    ("dji", "다우", "DJIA", "usd", ".DJI"),
+    ("spx", "S&P 500", "S&P 500", "usd", ".SPX"),
+    ("ixic", "나스닥", "Nasdaq Composite", "usd", ".IXIC"),
+    ("tnx", "미국채 10년", "CBOE 10Y Yield", "pct", ".TNX"),
+    ("wti", "WTI", "NYMEX 선물", "usd", "@CL.1"),
 )
 _markets_cache: tuple[float, dict] | None = None
+_HTTP_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 
-def get_fx_rate() -> dict:
-    body = _call("ust31301", "/api/us/exchange", {"exch_tp": "1"})
-    last = abs(to_float(body.get("aplc_exrt") or body.get("buy_aplc_exrt") or body.get("spcl_bf_exrt")))
-    _set_status(connected=True)
+def _http_get(url: str, timeout: float = 8.0) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": _HTTP_UA, "Accept": "application/json,text/plain,*/*"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
+
+
+def _cnbc_quotes(symbols: list[str]) -> dict[str, dict]:
+    joined = "|".join(symbols)
+    url = (
+        "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol"
+        f"?symbols={urllib.parse.quote(joined, safe='.|@')}&requestMethod=itv&noform=1&partnerId=2&fund=json"
+    )
+    payload = json.loads(_http_get(url).decode("utf-8", errors="replace"))
+    out: dict[str, dict] = {}
+    for raw in ((payload.get("FormattedQuoteResult") or {}).get("FormattedQuote") or []):
+        last = abs(to_float(raw.get("last")))
+        if not last:
+            continue
+        out[str(raw.get("symbol") or "")] = {
+            "last": last,
+            "change": to_float(raw.get("change")),
+            "changePct": to_float(str(raw.get("change_pct") or "").replace("%", "")),
+            "source": "cnbc",
+            "hint": str(raw.get("exchange") or raw.get("name") or ""),
+        }
+    return out
+
+
+def get_fx_rate(market: dict | None = None) -> dict:
+    if KIWOOM_ENABLED:
+        try:
+            body = _call("ust31301", "/api/us/exchange", {"exch_tp": "1"})
+            last = abs(to_float(body.get("aplc_exrt") or body.get("buy_aplc_exrt") or body.get("spcl_bf_exrt")))
+            if last:
+                from app.store import store
+
+                store.set_fx(last)
+                _set_status(connected=True)
+                return {
+                    "id": "usdkrw",
+                    "label": "원달러",
+                    "hint": "키움 적용환율",
+                    "last": last,
+                    "change": 0,
+                    "changePct": 0,
+                    "unit": "krw",
+                    "source": "kiwoom",
+                }
+        except Exception:  # noqa: BLE001
+            pass
+    if not market:
+        raise RuntimeError("환율을 불러오지 못했습니다")
+    from app.store import store
+
+    store.set_fx(float(market["last"]))
     return {
         "id": "usdkrw",
         "label": "원달러",
-        "hint": str(body.get("exrt_tp_nm") or "고시환율"),
-        "last": last,
-        "change": 0,
-        "changePct": 0,
+        "hint": "USD/KRW 시장환율",
+        "last": market["last"],
+        "change": market["change"],
+        "changePct": market["changePct"],
         "unit": "krw",
+        "source": market.get("source") or "cnbc",
     }
 
 
 def get_markets() -> dict:
     global _markets_cache
     now = time.time()
-    if _markets_cache and now - _markets_cache[0] < 120:
+    if _markets_cache and now - _markets_cache[0] < 90:
         return _markets_cache[1]
+    symbols = [row[4] for row in _INDEX_ROWS] + ["KRW="]
+    quotes: dict[str, dict] = {}
+    try:
+        quotes = _cnbc_quotes(symbols)
+    except Exception:  # noqa: BLE001
+        quotes = {}
     rows: list[dict] = []
-    rate_limited = False
-    for row_id, label, hint, code, stex in _MARKET_ROWS:
-        try:
-            quote = get_quote_lite(stex, code)
+    for row_id, label, hint, unit, symbol in _INDEX_ROWS:
+        quote = quotes.get(symbol)
+        if not quote:
+            continue
+        last = float(quote["last"])
+        change = float(quote["change"])
+        if row_id == "tnx" and last > 20:
+            last /= 10
+            change /= 10
+        rows.append(
+            {
+                "id": row_id,
+                "label": label,
+                "hint": quote.get("hint") or hint,
+                "last": last,
+                "change": change,
+                "changePct": quote["changePct"],
+                "unit": unit,
+                "source": quote.get("source") or "cnbc",
+            }
+        )
+    try:
+        fx = get_fx_rate(quotes.get("KRW="))
+        rows.append(fx)
+        spot = quotes.get("KRW=")
+        if spot and fx.get("source") == "kiwoom":
             rows.append(
                 {
-                    "id": row_id,
-                    "label": label,
-                    "hint": hint,
-                    "stkCd": quote.get("stkCd") or code,
-                    "stexTp": quote.get("stexTp") or stex,
-                    "last": quote.get("last") or 0,
-                    "change": quote.get("change") or 0,
-                    "changePct": quote.get("changePct") or 0,
-                    "unit": "usd",
+                    "id": "usdkrw-spot",
+                    "label": "시장환율",
+                    "hint": "USD/KRW 현물",
+                    "last": spot["last"],
+                    "change": spot["change"],
+                    "changePct": spot["changePct"],
+                    "unit": "krw",
+                    "source": spot.get("source") or "cnbc",
                 }
             )
-            fx = abs(to_float(quote.get("fxUsdKrw")))
-            if fx:
-                from app.store import store
-
-                store.set_fx(fx)
-        except Exception as exc:  # noqa: BLE001
-            text = str(exc)
-            if "429" in text or "1700" in text or "유량" in text or "한도" in text:
-                rate_limited = True
-                break
-            continue
-    if not rate_limited:
-        try:
-            rows.append(get_fx_rate())
-        except Exception:  # noqa: BLE001
-            pass
-    if (rate_limited or not rows) and _markets_cache:
+    except Exception:  # noqa: BLE001
+        pass
+    if not rows and _markets_cache:
         return _markets_cache[1]
     payload = {"markets": rows, "at": now}
     if rows:

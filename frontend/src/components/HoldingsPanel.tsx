@@ -51,7 +51,7 @@ export function HoldingsPanel({ compact = false, onSymbol, selectOnClick = false
   const mark = (key: PosKey) => (sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "");
 
   return (
-    <section className={`panel flex min-h-0 flex-col overflow-hidden ${compact ? "h-full min-h-[18rem] xl:min-h-0" : "flex-1"}`}>
+    <section className={`panel flex min-h-0 flex-col overflow-hidden ${compact ? "min-h-[18rem] lg:h-full lg:min-h-0" : "flex-1"}`}>
       <div className="flex shrink-0 items-center gap-2 bg-ink-800/40 px-2 py-1">
         <span className="shrink-0 font-medium">잔고</span>
         <p className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[13px] text-cream-500">
