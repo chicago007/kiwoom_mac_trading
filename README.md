@@ -41,12 +41,100 @@ Windows 영웅문(HTS)이나 공식 WTS 없이, 맥에서 키움증권 REST API�
 
 시세·호가·차트·잔고는 키움입니다. 주문은 2단계 확인 후, `KIWOOM_ORDERS_ENABLED=true`일 때 키움으로 나갑니다.
 
-## 실행
+## 맥에서 설치하기
 
-터미널 두 개. UI는 **3010**, API는 **8010**입니다. 기존 프로젝트(3000/8000)와 같이 켜도 됩니다.
+Windows 영웅문(HTS)이나 OpenAPI+(OCX)는 **필요 없습니다.** 맥에 아래만 있으면 됩니다.
+
+키움 계좌·해외주식 신청·앱키 발급은 [docs/사전절차.md](docs/사전절차.md)를 먼저 보세요. 키가 없으면 화면은 켜져도 시세·주문이 안 됩니다.
+
+### 필요한 프로그램
+
+| 프로그램 | 버전 | 용도 | 설치 |
+| --- | --- | --- | --- |
+| macOS | 최신 권장 | MacBook, 맥 미니, 맥 스튜디오 등 | — |
+| Xcode Command Line Tools | 최신 | `git`, 컴파일 도구 | `xcode-select --install` |
+| Homebrew | 최신 | 아래 프로그램 설치 (권장) | [brew.sh](https://brew.sh) |
+| Python | **3.13 이상** | 백엔드(API) | `brew install python@3.13` |
+| Node.js | **20 LTS 이상** | 프론트(화면) | `brew install node@20` |
+| 브라우저 | Safari / Chrome 등 | 매매 화면 | 맥에 있는 것 |
+
+확인:
 
 ```bash
-# 1) API
+git --version
+python3 --version   # 3.13 이상
+node -v             # v20 이상
+npm -v
+```
+
+선택:
+
+| 프로그램 | 용도 |
+| --- | --- |
+| [키움 CLI (`kwcli`)](https://github.com/Kiwoom-Securities/Kiwoom-REST-API) | 키가 먹히는지 터미널에서 확인. `brew install uv` 후 `uv tool install kwcli` |
+| 영웅문S (아이폰/안드로이드) | 계좌 개설, 해외주식 신청, 환전, 체결 재확인 |
+| Cursor / VS Code | 코드를 열어볼 때 |
+
+설치하지 마세요: OpenAPI+(OCX), KOA Studio, OpenAPI-W, 32비트 Python. 전부 Windows·다른 상품용입니다.
+
+### 1) 맥에 기본 프로그램 깔기
+
+터미널(응용 프로그램 > 유틸리티 > 터미널)을 엽니다.
+
+```bash
+# 개발 도구 (git 포함). 이미 있으면 넘어갑니다.
+xcode-select --install
+
+# Homebrew. 안내가 끝나면 시킨 대로 PATH를 넣고 터미널을 다시 엽니다.
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+brew install python@3.13 node@20
+```
+
+Apple Silicon(M1/M2/M3/M4)에서 `python3`가 3.13이 아니면:
+
+```bash
+echo 'export PATH="/opt/homebrew/opt/python@3.13/libexec/bin:$PATH"' >> ~/.zprofile
+echo 'export PATH="/opt/homebrew/opt/node@20/bin:$PATH"' >> ~/.zprofile
+source ~/.zprofile
+```
+
+### 2) 이 저장소 받기
+
+```bash
+git clone https://github.com/chicago007/kiwoom_mac_trading.git
+cd kiwoom_mac_trading
+```
+
+ZIP으로 받아 풀어도 됩니다. 이후 명령은 이 폴더 안에서 실행합니다.
+
+### 3) 키움 키 넣기
+
+```bash
+cp .env.example .env
+```
+
+`.env`를 열어 본인 값을 넣습니다. **이 파일은 Git에 올리지 마세요.**
+
+```
+KIWOOM_MODE=real          # 모의면 demo
+APP_KEY=                  # 운영 키
+APP_SECRET=
+APP_KEY_MOCK=             # 모의 키 (쓸 때만)
+APP_SECRET_MOCK=
+
+KIWOOM_ENABLED=true                 # 시세·호가·잔고를 키움에서 가져옴
+KIWOOM_ORDERS_ENABLED=false         # true 일 때만 실제 주문이 나감. 처음엔 false
+```
+
+운영/모의 키는 서로 다릅니다. 처음에는 `KIWOOM_ORDERS_ENABLED=false`로 시세만 보고, 소액 주문을 확인할 때 `true`로 바꾸세요.
+
+### 4) 실행
+
+터미널을 **두 개** 엽니다. UI는 **3010**, API는 **8010**입니다.
+
+```bash
+# 터미널 1 — API
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
@@ -55,16 +143,18 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8010 --timeout-graceful-sh
 ```
 
 ```bash
-# 2) UI
+# 터미널 2 — 화면
 cd frontend
 npm install
 npm run dev
 ```
 
-브라우저: http://127.0.0.1:3010  
+브라우저에서 http://127.0.0.1:3010 을 엽니다.  
 API 문서: http://127.0.0.1:8010/docs
 
-키는 이 폴더의 `.env`에만 둡니다. `.env.example`을 복사하세요. Git에는 올리지 마세요.
+다음에 켤 때는 가상환경 만들기와 `pip install` / `npm install`은 생략하고, `source .venv/bin/activate` 후 uvicorn과 `npm run dev`만 다시 실행하면 됩니다.
+
+막히면 [docs/사전절차.md](docs/사전절차.md) 체크리스트와 [docs/개발가이드.md](docs/개발가이드.md)를 보세요.
 
 ## 화면
 
