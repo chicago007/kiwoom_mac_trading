@@ -8,9 +8,10 @@ type Props = {
   quote: Quote;
   onPick: (price: number, side?: Side) => void;
   compact?: boolean;
+  slim?: boolean;
 };
 
-export function OrderBook({ quote, onPick, compact = false }: Props) {
+export function OrderBook({ quote, onPick, compact = false, slim = false }: Props) {
   const asks = saneLevels(quote, "ask");
   const bids = saneLevels(quote, "bid");
   const maxQty = Math.max(...asks.map((l) => l.qty), ...bids.map((l) => l.qty), 1);
@@ -20,8 +21,17 @@ export function OrderBook({ quote, onPick, compact = false }: Props) {
   const resetKey = `${quote.stkCd}-${quote.stexTp}`;
 
   return (
-    <div className="panel flex h-full min-h-[22rem] flex-col overflow-hidden lg:min-h-0">
-      <div className={`shrink-0 bg-ink-800/40 ${compact ? "px-2 py-1" : "px-3 py-2"}`}>
+    <div className={`panel flex h-full flex-col overflow-hidden ${slim ? "min-h-0" : "min-h-[22rem] lg:min-h-0"}`}>
+      <div className={`shrink-0 bg-ink-800/40 ${compact || slim ? "px-2 py-1" : "px-3 py-2"}`}>
+        {slim ? (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium">호가</p>
+            <p className={`text-[12px] ${quote.bookLive ? "text-brass-400" : "text-cream-500"}`}>
+              {quote.bookLive ? "실시간" : asks.length || bids.length ? "10호가" : "대기"}
+            </p>
+          </div>
+        ) : (
+          <>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs text-cream-500">호가창 · {exchangeLabel(quote.stexTp)}</p>
@@ -51,6 +61,8 @@ export function OrderBook({ quote, onPick, compact = false }: Props) {
             <Stat label="거래량" value={formatQty(quote.volume)} />
             <Stat label="스프레드" value={formatUsd(Math.max(0, quote.ask - quote.bid))} />
           </dl>
+        )}
+          </>
         )}
       </div>
 

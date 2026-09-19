@@ -10,12 +10,18 @@ import { APP_VERSION } from "@/lib/version";
 
 const NAV = [
   { href: "/", label: "종합" },
+  { href: "/desk2", label: "종합2" },
   { href: "/logs", label: "로그" },
   { href: "/settings", label: "설정" },
 ];
 
 function isDeskPath(pathname: string) {
-  return pathname === "/" || pathname === "/trade";
+  return pathname === "/" || pathname === "/trade" || pathname === "/desk2";
+}
+
+function navActive(href: string, pathname: string) {
+  if (href === "/") return pathname === "/" || pathname === "/trade";
+  return pathname === href;
 }
 
 function useClock() {
@@ -62,7 +68,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <nav className="hidden flex-1 items-center gap-0 md:flex">
             {NAV.map((item) => {
-              const active = item.href === "/" ? desk : pathname === item.href;
+              const active = navActive(item.href, pathname);
               return (
                 <Link
                   key={item.href}
@@ -124,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               className={`shrink-0 px-2.5 py-1 text-xs ${
-                (item.href === "/" ? desk : pathname === item.href) ? "bg-ink-800 text-brass-400" : "text-cream-300"
+                (navActive(item.href, pathname) ? "bg-ink-800 text-brass-400" : "text-cream-300")
               }`}
             >
               {item.label}

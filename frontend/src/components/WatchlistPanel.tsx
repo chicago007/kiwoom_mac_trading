@@ -7,14 +7,15 @@ import { changeClass, formatPct, formatSignedUsd, formatUsd, formatVol } from "@
 import { useStore } from "@/lib/store";
 import type { Exchange, Quote } from "@/lib/types";
 
-type SortKey = "stkCd" | "last" | "change" | "volume";
+type SortKey = "stkCd" | "last" | "change" | "pct" | "volume";
 
 type Props = {
   onSymbol: (stkCd: string, stexTp: Exchange) => void;
   selected?: { stkCd: string; stexTp: Exchange };
+  variant?: "table" | "list";
 };
 
-export function WatchlistPanel({ onSymbol, selected }: Props) {
+export function WatchlistPanel({ onSymbol, selected, variant = "table" }: Props) {
   const { state, dispatch } = useStore();
   const groups = state.watchlists.filter((w) => w.source === "kiwoom_import");
   const [groupId, setGroupId] = useState(groups[0]?.id || "");
@@ -104,7 +105,7 @@ export function WatchlistPanel({ onSymbol, selected }: Props) {
   }
 
   return (
-    <section className="panel flex h-full min-h-0 flex-col overflow-hidden">
+    <section className="panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center gap-1 bg-ink-800/40 px-2 py-1">
         <span className="shrink-0 font-medium">관심종목</span>
         {groups.length > 1 ? (
@@ -163,7 +164,47 @@ export function WatchlistPanel({ onSymbol, selected }: Props) {
           추가
         </button>
       </form>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        {variant === "list" ? (
+          <div className="min-w-0">
+            <div className="desk2-list sticky top-0 bg-ink-800 py-1 text-[10px] leading-tight text-cream-500">
+              <button type="button" className="truncate text-left hover:text-brass-400" onClick={() => toggleSort("stkCd")}>
+                종목{mark("stkCd")}
+              </button>
+              <button type="button" className="truncate text-right hover:text-brass-400" onClick={() => toggleSort("last")}>
+                현재가{mark("last")}
+              </button>
+              <button type="button" className="truncate text-right hover:text-brass-400" onClick={() => toggleSort("change")}>
+                등락{mark("change")}
+              </button>
+              <button type="button" className="truncate text-right hover:text-brass-400" onClick={() => toggleSort("pct")}>
+                %{mark("pct")}
+              </button>
+            </div>
+            {rows.map(({ row, last, change, pct }) => {
+              const active = selected && selected.stkCd === row.stkCd && selected.stexTp === row.stexTp;
+              return (
+                <div
+                  key={row.id}
+                  className={`desk2-list cursor-pointer border-b border-ink-800 py-1 hover:bg-ink-800 ${active ? "bg-ink-800" : ""}`}
+                  onClick={() => onSymbol(row.stkCd, row.stexTp)}
+                >
+                  <div className="truncate text-[11px] font-medium">{row.stkCd}</div>
+                  <div className="truncate text-right font-mono text-[11px]">{last ? formatUsd(last) : "—"}</div>
+                  <div className={`truncate text-right font-mono text-[11px] ${last ? changeClass(change) : "text-cream-500"}`}>
+                    {last ? formatSignedUsd(change) : "—"}
+                  </div>
+                  <div className={`truncate text-right font-mono text-[11px] ${last ? changeClass(pct) : "text-cream-500"}`}>
+                    {last ? formatPct(pct) : "—"}
+                  </div>
+                </div>
+              );
+            })}
+            {rows.length === 0 && (
+              <p className="px-2 py-6 text-center text-[13px] text-cream-500">키움 관심종목이 없습니다. 영웅문에 있는 그룹을 불러오세요.</p>
+            )}
+          </div>
+        ) : (
         <table className="data tight">
           <thead className="sticky top-0 bg-ink-800">
             <tr>
@@ -227,6 +268,7 @@ export function WatchlistPanel({ onSymbol, selected }: Props) {
             )}
           </tbody>
         </table>
+        )}
       </div>
       {note && <p className="shrink-0 px-2 py-1 text-[12px] text-cream-500">{note}</p>}
     </section>

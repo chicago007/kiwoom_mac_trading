@@ -1,21 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { changeClass, formatKrw, formatPct, formatUsd } from "@/lib/format";
+import { changeClass, formatKrw, formatPct, formatSignedUsd, formatUsd } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Exchange, Position, Quote } from "@/lib/types";
 
 type Currency = "USD" | "KRW";
-type PosKey = "stkCd" | "qty" | "avgPrice" | "last" | "value" | "pnl" | "pct";
+type PosKey = "stkCd" | "qty" | "avgPrice" | "last" | "value" | "pnl" | "pct" | "lastChange" | "lastPct";
 
 type Props = {
   compact?: boolean;
+  variant?: "table" | "list";
   onSymbol?: (stkCd: string, stexTp: Exchange) => void;
   selectOnClick?: boolean;
   quote?: Quote | null;
 };
 
-export function HoldingsPanel({ compact = false, onSymbol, selectOnClick = false, quote = null }: Props) {
+export function HoldingsPanel({ compact = false, variant = "table", onSymbol, selectOnClick = false, quote = null }: Props) {
   const { state } = useStore();
   const [currency, setCurrency] = useState<Currency>("USD");
   const [sortKey, setSortKey] = useState<PosKey>("value");
@@ -51,7 +52,49 @@ export function HoldingsPanel({ compact = false, onSymbol, selectOnClick = false
   const mark = (key: PosKey) => (sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "");
 
   return (
-    <section className={`panel flex min-h-0 flex-col overflow-hidden ${compact ? "min-h-[18rem] lg:h-full lg:min-h-0" : "flex-1"}`}>
+    <section className={`panel flex min-h-0 min-w-0 flex-col overflow-hidden ${compact || variant === "list" ? "min-h-[18rem] lg:h-full lg:min-h-0" : "flex-1"}`}>
+      {variant === "list" ? (
+        <>
+          <div className="flex shrink-0 items-center bg-ink-800/40 px-2 py-1">
+            <span className="font-medium">잔고</span>
+          </div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <div className="desk2-list sticky top-0 bg-ink-800 py-1 text-[10px] leading-tight text-cream-500">
+              <button type="button" className="truncate text-left hover:text-brass-400" onClick={() => toggle("stkCd")}>
+                종목{mark("stkCd")}
+              </button>
+              <button type="button" className="truncate text-right hover:text-brass-400" onClick={() => toggle("last")}>
+                현재가{mark("last")}
+              </button>
+              <button type="button" className="truncate text-right hover:text-brass-400" onClick={() => toggle("lastChange")}>
+                등락{mark("lastChange")}
+              </button>
+              <button type="button" className="truncate text-right hover:text-brass-400" onClick={() => toggle("lastPct")}>
+                %{mark("lastPct")}
+              </button>
+            </div>
+            {rows.map((r) => (
+              <div
+                key={`${r.stexTp}-${r.stkCd}`}
+                className="desk2-list cursor-pointer border-b border-ink-800 py-1 hover:bg-ink-800"
+                onClick={selectOnClick && onSymbol ? () => onSymbol(r.stkCd, r.stexTp) : undefined}
+                title={onSymbol ? "클릭하면 주문 종목으로" : undefined}
+              >
+                <div className="truncate text-[11px] font-medium">{r.stkCd}</div>
+                <div className="truncate text-right font-mono text-[11px]">{r.last ? formatUsd(r.last) : "—"}</div>
+                <div className={`truncate text-right font-mono text-[11px] ${r.last ? changeClass(r.lastChange) : "text-cream-500"}`}>
+                  {r.last ? formatSignedUsd(r.lastChange) : "—"}
+                </div>
+                <div className={`truncate text-right font-mono text-[11px] ${r.last ? changeClass(r.lastPct) : "text-cream-500"}`}>
+                  {r.last ? formatPct(r.lastPct) : "—"}
+                </div>
+              </div>
+            ))}
+            {rows.length === 0 && <p className="px-2 py-6 text-center text-[13px] text-cream-500">보유 종목이 없습니다.</p>}
+          </div>
+        </>
+      ) : (
+        <>
       <div className="flex shrink-0 items-center gap-2 bg-ink-800/40 px-2 py-1">
         <span className="shrink-0 font-medium">잔고</span>
         <p className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[13px] text-cream-500">
@@ -135,6 +178,8 @@ export function HoldingsPanel({ compact = false, onSymbol, selectOnClick = false
           </tbody>
         </table>
       </div>
+        </>
+      )}
     </section>
   );
 }
@@ -171,6 +216,7 @@ function rowOf(p: Position, fx: number, quote?: Quote | null) {
   const pctKrw = costKrw ? (pnlKrw / costKrw) * 100 : pct;
   const prev = live?.prevClose || p.prevClose || 0;
   const lastPct = prev ? ((last - prev) / prev) * 100 : live?.changePct || p.changePct || 0;
+  const lastChange = prev ? last - prev : live?.change || 0;
   const value = p.qty * last;
   return {
     ...p,
@@ -180,6 +226,7 @@ function rowOf(p: Position, fx: number, quote?: Quote | null) {
     pct,
     pctKrw,
     lastPct,
+    lastChange,
     avgPriceKrw: avgKrw,
     lastKrw,
     valueKrw: value * rate,

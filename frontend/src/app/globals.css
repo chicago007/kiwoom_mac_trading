@@ -86,6 +86,6 @@ table.data.tight th {
   @apply px-1.5 py-1;
 }
 
-table.data.tight td {
-  @apply px-1.5 py-0.5;
+.desk2-list {
+  @apply grid w-full min-w-0 grid-cols-[2.6rem_minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,0.8fr)] items-center gap-x-0.5 px-1.5;
 }

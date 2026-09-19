@@ -11,7 +11,7 @@ from app import book_hub, kiwoom_gateway
 from app.store import store
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else "0.11"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else "0.2"
 
 
 @asynccontextmanager
@@ -98,6 +98,11 @@ def redirect_orders(request: Request) -> RedirectResponse:
 @app.get("/trade")
 def redirect_trade(request: Request) -> RedirectResponse:
     return _ui("/trade", request)
+
+
+@app.get("/desk2")
+def redirect_desk2(request: Request) -> RedirectResponse:
+    return _ui("/desk2", request)
 
 
 @app.get("/portfolio")

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { formatUsd } from "@/lib/format";
-import type { ChartBar, ChartInterval, Exchange } from "@/lib/types";
+import type { ChartBar, ChartInterval, Exchange, Quote } from "@/lib/types";
 
 const TFS: { id: ChartInterval; label: string }[] = [
   { id: "1", label: "1분" },
@@ -15,10 +15,11 @@ type Props = {
   stkCd: string;
   stexTp: Exchange;
   last?: number;
+  quote?: Quote | null;
   onPick?: (price: number) => void;
 };
 
-export function PriceChart({ stkCd, stexTp, last, onPick }: Props) {
+export function PriceChart({ stkCd, stexTp, last, quote, onPick }: Props) {
   const [interval, setIntervalTf] = useState<ChartInterval>("D");
   const [bars, setBars] = useState<ChartBar[]>([]);
   const [note, setNote] = useState("");
@@ -65,7 +66,9 @@ export function PriceChart({ stkCd, stexTp, last, onPick }: Props) {
   return (
     <section className="panel flex min-h-[10rem] min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center gap-1 px-2 py-1">
-        <span className="mr-auto text-[13px] text-cream-500">{note || "차트"}</span>
+        <span className="mr-auto truncate text-[13px] text-cream-500">
+          {quote ? `${quote.stkCd} ${quote.stkNm !== quote.stkCd ? quote.stkNm : ""}` : note || "차트"}
+        </span>
         {TFS.map((tf) => (
           <button
             key={tf.id}
@@ -77,6 +80,14 @@ export function PriceChart({ stkCd, stexTp, last, onPick }: Props) {
           </button>
         ))}
       </div>
+      {quote && (
+        <div className="flex shrink-0 flex-wrap gap-x-3 gap-y-0.5 px-2 pb-1 font-mono text-[12px] text-cream-300">
+          <span>시 {formatUsd(quote.open)}</span>
+          <span className="text-up">고 {formatUsd(quote.high)}</span>
+          <span className="text-down">저 {formatUsd(quote.low)}</span>
+          <span>전 {formatUsd(quote.prevClose)}</span>
+        </div>
+      )}
       <div ref={wrapRef} className="relative min-h-0 flex-1">
         {bars.length === 0 ? (
           <p className="px-2 py-8 text-center text-[13px] text-cream-500">{note || "차트를 불러오는 중…"}</p>
