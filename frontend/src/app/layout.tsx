@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Mac용 키움 REST API 기반 미국주식 수동매매 웹앱",
   description:
-    "키움증권 REST API를 이용하여 macOS에서 미국주식 시세·호가·잔고를 확인하고, 사용자가 직접 확인한 후 수동으로 주문할 수 있도록 만든 개인용 웹앱입니다.",
+    "키움증권 REST API를 이용하여 macOS에서 미국주식 시세·호가·잔고를 확인하고, 사용자가 직접 확인한 후 수동으로 주문할 수 있도록 만든 개인용 웹앱입니다. 키움 공식 HTS/WTS/MTS가 아니며 제휴·협력 관계가 없습니다. 제3자 계좌 운용·투자자문·투자일임·주문 대행을 목적으로 하지 않습니다.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
