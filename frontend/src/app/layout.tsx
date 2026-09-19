@@ -4,8 +4,9 @@ import { StoreProvider } from "@/lib/store";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "키움증권 맥북용 매매시스템",
-  description: "맥에서 키움 REST로 미국주식을 조회·수동 주문하는 웹앱",
+  title: "Mac용 키움 REST API 기반 미국주식 수동매매 웹앱",
+  description:
+    "키움증권 REST API를 이용하여 macOS에서 미국주식 시세·호가·잔고를 확인하고, 사용자가 직접 확인한 후 수동으로 주문할 수 있도록 만든 개인용 웹앱입니다.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

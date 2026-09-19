@@ -56,8 +56,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="shrink-0 bg-ink-900">
         <div className={`mx-auto flex items-center gap-3 ${desk ? "max-w-[1680px] px-2 py-1.5" : "max-w-[1400px] px-4 py-2"}`}>
           <Link href="/" className="shrink-0 leading-tight">
-            <div className="text-sm font-semibold">키움증권 맥북용 매매시스템</div>
-            <div className="text-[12px] text-cream-500">수동 매매 · v{APP_VERSION}</div>
+            <div className="text-sm font-semibold">Mac용 키움 REST API 기반 미국주식 수동매매</div>
+            <div className="text-[12px] text-cream-500">개인용 웹앱 · v{APP_VERSION}</div>
           </Link>
 
           <nav className="hidden flex-1 items-center gap-0 md:flex">

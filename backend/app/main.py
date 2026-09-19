@@ -21,7 +21,7 @@ async def lifespan(_app: FastAPI):
     book_hub.stop()
 
 
-app = FastAPI(title="키움증권 맥북용 매매시스템 API", version=VERSION, lifespan=lifespan)
+app = FastAPI(title="Mac용 키움 REST API 기반 미국주식 수동매매 API", version=VERSION, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:3010", "http://localhost:3010"],
