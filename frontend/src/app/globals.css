@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #070b12;
+  color: #e8eef6;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #243044 transparent;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.num,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  @apply rounded-none border-0 bg-ink-900;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-1 rounded-none px-2 py-1 text-xs font-medium;
+}
+
+.btn-primary {
+  @apply bg-brass-500 text-ink-950 hover:bg-brass-400;
+}
+
+.btn-ghost {
+  @apply bg-ink-800 text-cream-50 hover:bg-ink-700;
+}
+
+.btn-danger {
+  @apply bg-up text-white hover:brightness-110;
+}
+
+.field {
+  @apply w-full rounded-none border-0 bg-ink-950 px-2 py-1 text-xs text-cream-50 outline-none ring-1 ring-ink-700 focus:ring-brass-400;
+}
+
+.table-wrap {
+  @apply overflow-x-auto;
+}
+
+table.data {
+  @apply w-full min-w-[640px] border-separate border-spacing-0 text-xs;
+}
+
+table.data th {
+  @apply border-b border-ink-800 bg-ink-800 px-1.5 py-1 text-left text-[12px] font-medium text-cream-500;
+}
+
+table.data td {
+  @apply border-b border-ink-800 px-1.5 py-1 align-middle;
+}
+
+table.data.tight {
+  @apply min-w-0 text-[13px];
+}
+
+table.data.tight th {
+  @apply px-1.5 py-1;
+}
+
+table.data.tight td {
+  @apply px-1.5 py-0.5;
+}
