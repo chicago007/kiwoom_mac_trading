@@ -23,7 +23,9 @@ export function TickerSearch({ value, onChange, onPick, placeholder = "韹办护 霕
   const [hits, setHits] = useState<TickerHit[]>([]);
   const [recents, setRecents] = useState<RecentSymbol[]>([]);
   const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setRecents(readRecent());
@@ -42,7 +44,6 @@ export function TickerSearch({ value, onChange, onPick, placeholder = "韹办护 霕
         .then((data) => {
           if (!live) return;
           setHits((data.results || []).map((row) => ({ stkCd: row.stkCd, stexTp: row.stexTp, stkNm: row.stkNm })));
-          setOpen(true);
         })
         .catch(() => {
           if (live) setHits([]);
@@ -56,7 +57,10 @@ export function TickerSearch({ value, onChange, onPick, placeholder = "韹办护 霕
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!boxRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setFocused(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -67,36 +71,30 @@ export function TickerSearch({ value, onChange, onPick, placeholder = "韹办护 霕
     setRecents(next);
     onPick(hit);
     setOpen(false);
+    inputRef.current?.blur();
+    setFocused(false);
   }
 
+  const menuOn = focused && open;
   const list = hits.length > 0 ? hits : showRecent && !value.trim() ? recents : [];
 
   return (
-    <div ref={boxRef} className="relative">
-      {showRecent && recents.length > 0 && (
-        <div className="mb-1 flex flex-wrap gap-1">
-          {recents.map((hit) => (
-            <button
-              key={`${hit.stexTp}-${hit.stkCd}`}
-              type="button"
-              className="bg-ink-800 px-1.5 py-0.5 text-[11px] text-cream-300 hover:bg-ink-700 hover:text-cream-50"
-              onClick={() => pick(hit)}
-            >
-              {hit.stkCd}
-            </button>
-          ))}
-        </div>
-      )}
+    <div ref={boxRef} className="relative min-w-0">
       <input
+        ref={inputRef}
+        type="text"
         className="field uppercase"
         value={value}
         placeholder={placeholder}
         autoComplete="off"
+        spellCheck={false}
         onFocus={() => {
-          if (hits.length || (showRecent && recents.length && !value.trim())) setOpen(true);
+          setFocused(true);
+          setOpen(true);
         }}
         onChange={(e) => {
           onChange(e.target.value.toUpperCase());
+          setFocused(true);
           setOpen(true);
         }}
         onKeyDown={(e) => {
@@ -107,11 +105,9 @@ export function TickerSearch({ value, onChange, onPick, placeholder = "韹办护 霕
           if (e.key === "Escape") setOpen(false);
         }}
       />
-      {open && list.length > 0 && (
-        <ul className="absolute z-20 mt-0.5 max-h-48 w-full overflow-auto bg-ink-950 ring-1 ring-ink-700">
-          {hits.length === 0 && showRecent && (
-            <li className="px-2 py-1 text-[11px] text-cream-500">斓滉芳</li>
-          )}
+      {menuOn && list.length > 0 && (
+        <ul className="absolute z-30 mt-0.5 max-h-48 w-full overflow-auto bg-ink-950 ring-1 ring-ink-700">
+          {hits.length === 0 && showRecent && <li className="px-2 py-1 text-[11px] text-cream-500">斓滉芳</li>}
           {list.map((hit) => (
             <li key={`${hit.stexTp}-${hit.stkCd}`}>
               <button

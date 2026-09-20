@@ -145,15 +145,15 @@ export function TradingDesk() {
 
         <div className="flex min-h-[22rem] min-w-0 flex-col gap-1 lg:min-h-0">
           <form
-            className="panel flex shrink-0 flex-col gap-1.5 overflow-hidden p-2"
+            className="panel flex shrink-0 flex-col gap-1.5 overflow-visible p-2"
             onSubmit={(e) => {
               e.preventDefault();
               if (blocked) return;
               setConfirmOpen(true);
             }}
           >
-          <label className="block text-xs">
-            <span className="mb-0.5 block text-[12px] text-cream-500">
+          <div className="min-w-0 text-xs">
+            <span className="mb-0.5 block truncate text-[12px] text-cream-500">
               티커{quote ? ` · ${exchangeLabel(quote.stexTp)}` : ""} · {sessionLabel(session)}
             </span>
             <TickerSearch
@@ -172,38 +172,36 @@ export function TradingDesk() {
                 primedRef.current = "";
               }}
             />
-          </label>
-          <div className="grid grid-cols-2 gap-1.5">
-            <label className="block text-xs">
-              <span className="mb-0.5 block text-[12px] text-cream-500">구분</span>
-              <select className="field" value={side} onChange={(e) => setSide(e.target.value as Side)}>
+          </div>
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+            <label className="flex min-w-0 items-center gap-1.5 text-xs">
+              <span className="w-8 shrink-0 text-[12px] text-cream-500">구분</span>
+              <select className="field min-w-0 flex-1" value={side} onChange={(e) => setSide(e.target.value as Side)}>
                 <option value="buy">매수</option>
                 <option value="sell">매도</option>
               </select>
             </label>
-            <label className="block text-xs">
-              <span className="mb-0.5 flex items-center justify-between text-[12px] text-cream-500">
-                <span>수량</span>
-                {ableQty > 0 && (
-                  <button type="button" className="text-brass-400 hover:underline" onClick={() => setQty(ableQty)}>
-                    가능 {ableQty}주
-                  </button>
-                )}
-              </span>
-              <input className="field" type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
+            <label className="flex min-w-0 items-center gap-1.5 text-xs">
+              <span className="w-8 shrink-0 text-[12px] text-cream-500">수량</span>
+              <input className="field min-w-0 flex-1" type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
+              {ableQty > 0 && (
+                <button type="button" className="shrink-0 text-[12px] text-brass-400 hover:underline" onClick={() => setQty(ableQty)}>
+                  {ableQty}
+                </button>
+              )}
             </label>
-            <label className="block text-xs">
-              <span className="mb-0.5 block text-[12px] text-cream-500">유형</span>
-              <select className="field" value={trdeTp} onChange={(e) => setTrdeTp(e.target.value)}>
+            <label className="flex min-w-0 items-center gap-1.5 text-xs">
+              <span className="w-8 shrink-0 text-[12px] text-cream-500">유형</span>
+              <select className="field min-w-0 flex-1" value={trdeTp} onChange={(e) => setTrdeTp(e.target.value)}>
                 <option value="00">지정가</option>
                 <option value="03">시장가</option>
                 <option value="30">LOC</option>
               </select>
             </label>
-            <label className="block text-xs">
-              <span className="mb-0.5 block text-[12px] text-cream-500">가격 (USD)</span>
+            <label className="flex min-w-0 items-center gap-1.5 text-xs">
+              <span className="w-8 shrink-0 text-[12px] text-cream-500">가격</span>
               <input
-                className="field"
+                className="field min-w-0 flex-1"
                 type="number"
                 step="0.01"
                 disabled={trdeTp === "03"}
@@ -213,24 +211,26 @@ export function TradingDesk() {
               />
             </label>
           </div>
-          <div className="bg-ink-950 px-2 py-1.5">
-            <p className="text-[13px] text-cream-500">예상 총액{trdeTp === "03" ? " (시장가 기준)" : ""}</p>
-            <p className="mt-0.5 whitespace-nowrap font-mono text-[13px] leading-tight text-brass-400">
-              {notionalUsd ? formatUsd(notionalUsd) : "—"}
-              {notionalKrw ? ` ${formatKrw(notionalKrw)}` : ""}
-              {fx ? ` · ${fx.toFixed(2)}원/$` : ""}
-            </p>
-            {side === "buy" && state.cashUsd > 0 && (
-              <p className="mt-0.5 text-[12px] text-cream-500">예수금 {formatUsd(state.cashUsd)}</p>
-            )}
-            {side === "sell" && posQty > 0 && <p className="mt-0.5 text-[12px] text-cream-500">보유 {posQty}주</p>}
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1 bg-ink-950 px-2 py-1">
+              <p className="truncate font-mono text-[13px] leading-tight text-brass-400">
+                {notionalUsd ? formatUsd(notionalUsd) : "—"}
+                {notionalKrw ? ` ${formatKrw(notionalKrw)}` : ""}
+                {fx ? ` · ${fx.toFixed(2)}원/$` : ""}
+                {trdeTp === "03" ? " · 시장가" : ""}
+              </p>
+              {side === "buy" && state.cashUsd > 0 && (
+                <p className="truncate text-[12px] text-cream-500">예수금 {formatUsd(state.cashUsd)}</p>
+              )}
+              {side === "sell" && posQty > 0 && <p className="truncate text-[12px] text-cream-500">보유 {posQty}주</p>}
+            </div>
+            <button className="btn btn-primary shrink-0 px-4 disabled:pointer-events-none disabled:opacity-40" type="submit" disabled={blocked}>
+              {blocked ? "킬스위치 — 주문 중지" : "주문"}
+            </button>
           </div>
           {sessionNote && <p className="text-[12px] text-cream-500">{sessionNote}</p>}
           {overAble && <p className="text-[12px] text-up">가능수량 {ableQty}주를 넘습니다.</p>}
           {overCash && <p className="text-[12px] text-up">예수금보다 총액이 큽니다.</p>}
-          <button className="btn btn-primary w-full disabled:pointer-events-none disabled:opacity-40" type="submit" disabled={blocked}>
-            {blocked ? "킬스위치 — 주문 중지" : "주문"}
-          </button>
           {lastError && <p className="text-sm text-up">{lastError.message}</p>}
         </form>
         <PriceChart

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ActivityPanel } from "@/components/ActivityPanel";
-import { HoldingsPanel } from "@/components/HoldingsPanel";
 import { OrderBook } from "@/components/OrderBook";
 import { PriceChart } from "@/components/PriceChart";
 import { TickerSearch } from "@/components/TickerSearch";
@@ -18,8 +17,6 @@ import { useStore } from "@/lib/store";
 import { isExchange, resolveExchange } from "@/lib/symbols";
 import { useLiveQuote } from "@/lib/useLiveQuote";
 import type { Exchange, Side } from "@/lib/types";
-
-type LeftTab = "watch" | "hold";
 
 export function TradingDesk2() {
   const search = useSearchParams();
@@ -41,7 +38,6 @@ export function TradingDesk2() {
   const [modifyId, setModifyId] = useState<string | null>(null);
   const [modifyPrice, setModifyPrice] = useState(0);
   const [able, setAble] = useState<{ able: number; cashUsd: number; holdQty: number } | null>(null);
-  const [leftTab, setLeftTab] = useState<LeftTab>("watch");
   const primedRef = useRef("");
   const session = useUsSession();
   const sessionNote = sessionHint(session);
@@ -133,30 +129,7 @@ export function TradingDesk2() {
       <MarketStrip />
       <div className="grid min-h-[36rem] flex-[5] gap-1 lg:min-h-0 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)_minmax(190px,230px)_minmax(240px,280px)] lg:[&>*]:min-h-0">
         <section className="flex min-h-[18rem] min-w-0 flex-col overflow-hidden lg:min-h-0">
-          <div className="flex shrink-0 bg-ink-800/40">
-            {(
-              [
-                ["watch", "관심종목"],
-                ["hold", "잔고"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={`px-3 py-1 text-xs ${leftTab === id ? "bg-ink-700 text-brass-400" : "text-cream-300 hover:text-cream-50"}`}
-                onClick={() => setLeftTab(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="min-h-0 flex-1">
-            {leftTab === "watch" ? (
-              <WatchlistPanel variant="list" onSymbol={pickSymbol} selected={{ stkCd, stexTp }} />
-            ) : (
-              <HoldingsPanel variant="list" selectOnClick onSymbol={pickSymbol} quote={quote} />
-            )}
-          </div>
+          <WatchlistPanel variant="list" onSymbol={pickSymbol} selected={{ stkCd, stexTp }} />
         </section>
 
         <div className="flex min-h-[22rem] min-w-0 flex-col gap-1 lg:min-h-0">
