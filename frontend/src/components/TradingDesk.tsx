@@ -77,7 +77,10 @@ export function TradingDesk() {
   const notionalUsd = Math.max(0, qty) * (unitPrice || 0);
   const notionalKrw = fx ? notionalUsd * fx : 0;
   const lastError = state.logs.find((row) => row.level === "error");
-  const posQty = state.positions.find((p) => p.stkCd === stkCd && p.stexTp === stexTp)?.qty || 0;
+  const posQty =
+    state.positions.find((p) => p.stkCd === stkCd && p.stexTp === stexTp)?.qty ||
+    state.positions.find((p) => p.stkCd === stkCd)?.qty ||
+    0;
   const cashAble = unitPrice > 0 ? Math.floor(state.cashUsd / unitPrice) : 0;
   const ableQty = able?.able ?? (side === "sell" ? posQty : cashAble);
   const overAble = ableQty > 0 && qty > ableQty;
@@ -184,11 +187,15 @@ export function TradingDesk() {
             <label className="flex min-w-0 items-center gap-1.5 text-xs">
               <span className="w-8 shrink-0 text-[12px] text-cream-500">수량</span>
               <input className="field min-w-0 flex-1" type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
-              {ableQty > 0 && (
+              {side === "sell" && posQty > 0 ? (
+                <button type="button" className="shrink-0 text-[12px] text-brass-400 hover:underline" onClick={() => setQty(posQty)}>
+                  잔고 {posQty}주
+                </button>
+              ) : ableQty > 0 ? (
                 <button type="button" className="shrink-0 text-[12px] text-brass-400 hover:underline" onClick={() => setQty(ableQty)}>
                   {ableQty}
                 </button>
-              )}
+              ) : null}
             </label>
             <label className="flex min-w-0 items-center gap-1.5 text-xs">
               <span className="w-8 shrink-0 text-[12px] text-cream-500">유형</span>
@@ -222,7 +229,6 @@ export function TradingDesk() {
               {side === "buy" && state.cashUsd > 0 && (
                 <p className="truncate text-[12px] text-cream-500">예수금 {formatUsd(state.cashUsd)}</p>
               )}
-              {side === "sell" && posQty > 0 && <p className="truncate text-[12px] text-cream-500">보유 {posQty}주</p>}
             </div>
             <button className="btn btn-primary shrink-0 px-4 disabled:pointer-events-none disabled:opacity-40" type="submit" disabled={blocked}>
               {blocked ? "킬스위치 — 주문 중지" : "주문"}

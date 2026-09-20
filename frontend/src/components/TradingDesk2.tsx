@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ActivityPanel } from "@/components/ActivityPanel";
+import { HoldingsPanel } from "@/components/HoldingsPanel";
 import { OrderBook } from "@/components/OrderBook";
 import { PriceChart } from "@/components/PriceChart";
 import { TickerSearch } from "@/components/TickerSearch";
@@ -17,6 +18,8 @@ import { useStore } from "@/lib/store";
 import { isExchange, resolveExchange } from "@/lib/symbols";
 import { useLiveQuote } from "@/lib/useLiveQuote";
 import type { Exchange, Side } from "@/lib/types";
+
+type LeftTab = "watch" | "hold";
 
 export function TradingDesk2() {
   const search = useSearchParams();
@@ -38,6 +41,7 @@ export function TradingDesk2() {
   const [modifyId, setModifyId] = useState<string | null>(null);
   const [modifyPrice, setModifyPrice] = useState(0);
   const [able, setAble] = useState<{ able: number; cashUsd: number; holdQty: number } | null>(null);
+  const [leftTab, setLeftTab] = useState<LeftTab>("watch");
   const primedRef = useRef("");
   const session = useUsSession();
   const sessionNote = sessionHint(session);
@@ -76,7 +80,10 @@ export function TradingDesk2() {
   const notionalUsd = Math.max(0, qty) * (unitPrice || 0);
   const notionalKrw = fx ? notionalUsd * fx : 0;
   const lastError = state.logs.find((row) => row.level === "error");
-  const posQty = state.positions.find((p) => p.stkCd === stkCd && p.stexTp === stexTp)?.qty || 0;
+  const posQty =
+    state.positions.find((p) => p.stkCd === stkCd && p.stexTp === stexTp)?.qty ||
+    state.positions.find((p) => p.stkCd === stkCd)?.qty ||
+    0;
   const cashAble = unitPrice > 0 ? Math.floor(state.cashUsd / unitPrice) : 0;
   const ableQty = able?.able ?? (side === "sell" ? posQty : cashAble);
   const overAble = ableQty > 0 && qty > ableQty;
@@ -129,7 +136,30 @@ export function TradingDesk2() {
       <MarketStrip />
       <div className="grid min-h-[36rem] flex-[5] gap-1 lg:min-h-0 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)_minmax(190px,230px)_minmax(240px,280px)] lg:[&>*]:min-h-0">
         <section className="flex min-h-[18rem] min-w-0 flex-col overflow-hidden lg:min-h-0">
-          <WatchlistPanel variant="list" onSymbol={pickSymbol} selected={{ stkCd, stexTp }} />
+          <div className="flex shrink-0 bg-ink-800/40">
+            {(
+              [
+                ["watch", "관심종목"],
+                ["hold", "잔고"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={`px-3 py-1 text-xs ${leftTab === id ? "bg-ink-700 text-brass-400" : "text-cream-300 hover:text-cream-50"}`}
+                onClick={() => setLeftTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1">
+            {leftTab === "watch" ? (
+              <WatchlistPanel variant="list" onSymbol={pickSymbol} selected={{ stkCd, stexTp }} />
+            ) : (
+              <HoldingsPanel variant="list" selectOnClick onSymbol={pickSymbol} quote={quote} />
+            )}
+          </div>
         </section>
 
         <div className="flex min-h-[22rem] min-w-0 flex-col gap-1 lg:min-h-0">
@@ -245,11 +275,15 @@ export function TradingDesk2() {
           <label className="block text-xs">
             <span className="mb-0.5 flex items-center justify-between text-[12px] text-cream-500">
               <span>수량</span>
-              {ableQty > 0 && (
+              {side === "sell" && posQty > 0 ? (
+                <button type="button" className="text-brass-400 hover:underline" onClick={() => setQty(posQty)}>
+                  잔고 {posQty}주
+                </button>
+              ) : ableQty > 0 ? (
                 <button type="button" className="text-brass-400 hover:underline" onClick={() => setQty(ableQty)}>
                   가능 {ableQty}주
                 </button>
-              )}
+              ) : null}
             </span>
             <input className="field" type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} />
           </label>
@@ -282,7 +316,6 @@ export function TradingDesk2() {
             {side === "buy" && state.cashUsd > 0 && (
               <p className="mt-0.5 text-[12px] text-cream-500">예수금 {formatUsd(state.cashUsd)}</p>
             )}
-            {side === "sell" && posQty > 0 && <p className="mt-0.5 text-[12px] text-cream-500">보유 {posQty}주</p>}
           </div>
           {sessionNote && <p className="text-[12px] text-cream-500">{sessionNote}</p>}
           {overAble && <p className="text-[12px] text-up">가능수량 {ableQty}주를 넘습니다.</p>}

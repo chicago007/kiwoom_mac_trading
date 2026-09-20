@@ -11,7 +11,7 @@ from app import book_hub, kiwoom_gateway
 from app.store import store
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else "0.21"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else "0.22"
 
 
 @asynccontextmanager

@@ -58,7 +58,6 @@ export function WatchlistPanel({ onSymbol, selected, variant = "table" }: Props)
   }
 
   const mark = (key: SortKey) => (sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "");
-  const group = groups.find((g) => g.id === groupId);
 
   useEffect(() => {
     let live = true;
@@ -116,9 +115,9 @@ export function WatchlistPanel({ onSymbol, selected, variant = "table" }: Props)
               </option>
             ))}
           </select>
-        ) : (
-          <span className="truncate text-[13px] text-cream-500">{group?.name || "키움 그룹 없음"}</span>
-        )}
+        ) : groups.length === 0 ? (
+          <span className="truncate text-[13px] text-cream-500">키움 그룹 없음</span>
+        ) : null}
         <button className="btn btn-ghost ml-auto !px-1.5 !py-0.5" type="button" onClick={() => dispatch({ type: "importKiwoom" })}>
           불러오기
         </button>
